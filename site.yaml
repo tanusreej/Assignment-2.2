@@ -1,0 +1,133 @@
+- hosts: all #reaching out to all the hosts and gathering variables and other information
+  gather_facts: yes
+  become: yes
+  become_method: sudo
+  tasks:
+    - name: update all hosts #sudo apt update (updating all the servers)
+      apt:
+        update_cache: yes
+# Firstly updating the webservers, installing flask and deploying the webservers and then configuring haproxy
+- hosts: webservers #reaching out to webservers and also giving sudo permissions
+  become: true
+  become_method: sudo
+  gather_facts: true
+  tasks:
+    - name: update all webservers #updating to the latest state
+      apt:
+        update_cache: true
+
+    - name: install nginx
+      apt:
+        name: nginx
+        state: latest
+        update_cache: true
+
+    - name: pip3 installation #python installation using pip3
+      apt:
+        name: python3-pip
+        state: latest
+        update_cache: true
+
+    - name: Installing flask #flask app installation
+      pip:
+        executable: pip3
+        name: flask
+        state: latest
+
+
+    - name: apt update
+      apt:
+        update_cache: true
+
+    - name: gunicorn installation #gunicorn installation for gateway interface installation
+      pip:
+        executable: pip3
+        name: gunicorn
+        state: latest
+
+    - name: apt update
+      apt:
+        update_cache: true
+
+    - name: copy flask app code  #copying the code from app.py to flask app
+      copy:
+        src: /$PWD/app.py
+        dest: /home/ubuntu/app.py
+        owner: ubuntu
+        mode: '0644'
+
+    - name: Running Flask application #Execute the flask app
+      shell: gunicorn -w 2 -D -b 0.0.0.0:5000 app:app
+
+    - name: install snmp in webservers
+      apt:
+        name: snmpd
+        state: latest
+        update_cache: true
+
+    - name: configure snmpd
+      template:
+             src: snmpd.conf
+             dest: /etc/snmp/snmpd.conf
+
+    - name: restarting snmp
+      service:
+            name: snmpd
+            state: restarted
+
+    - name: apt update
+      apt:
+        update_cache: true
+- hosts: all
+  gather_facts: true
+#Now Installing haproxy, configuring it and then haproxy restart
+- hosts: HAproxy # gathering haproxy host
+  become: true
+  tasks:
+    - name: update HAproxy
+      apt:
+        update_cache: yes
+
+    - name: Installing HAPROXY
+      apt:
+        name: haproxy
+        state: present
+        update_cache: true
+
+    - name: Configure haproxy
+      template:
+             src: /$PWD/haproxy.cfg.j2
+             dest: /etc/haproxy/haproxy.cfg
+
+    - name: Restart haproxy
+      service:
+        name: haproxy
+        state: restarted
+
+    - name: apt update
+      apt:
+        update_cache: true
+
+    - name: Installing Nginx
+      apt:
+        name: nginx
+        update_cache: yes
+        state: latest
+
+    - name: configure nginx udp port
+      template:
+             src: nginxport.conf
+             dest: /etc/nginx/sites-available/default
+
+    - name: configure udp loadbalancing
+      template:
+             src: nginxlb.conf
+             dest: /etc/nginx/nginx.conf
+
+    - name: Restart Nginx
+      service:
+            name: nginx
+            state: restarted
+    - name: apt update
+      apt:
+        update_cache: true
